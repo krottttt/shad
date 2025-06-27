@@ -1,0 +1,10 @@
+import numpy as np
+x = np.arange(2)
+print(len(x.shape))
+X = np.array([x]*3)
+print(X.reshape(-1,2))
+print(np.zeros([X.shape[0],3])[0])
+y_pred =np.array([[0.9,1.1],[0.3,1.6]])
+print(np.divide(y_pred,2))
+print(np.random.randint(0, 2, size=10))
+print(np.bincount(np.array([0,3]).astype(int), minlength=2))
