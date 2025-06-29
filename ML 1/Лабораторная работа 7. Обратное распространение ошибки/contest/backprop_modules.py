@@ -292,7 +292,7 @@ class Conv2d(Module):
         # YOUR CODE ##############################
         # 1. zero-pad the input array
         # 2. compute convolution using scipy.signal.correlate(... , mode='valid')
-        # 3. add bias value
+        # 3; 4; 9; 10 and 11.md add bias value
         self._output = np.zeros((n_batch,self.out_channels,h,w))
         # print(self._output.shape)
         
@@ -339,7 +339,7 @@ class Conv2d(Module):
         # YOUR CODE #############
         # 1. zero-pad the input
         # 2. compute 'self.gradW' using scipy.signal.correlate(... , mode='valid')
-        # 3. compute 'self.gradb' - formulas like in Linear of ChannelwiseScaling layers
+        # 3; 4; 9; 10 and 11.md compute 'self.gradb' - formulas like in Linear of ChannelwiseScaling layers
 
         pad_input = np.pad(input,((0,0),(0,0),(pad_size,pad_size),(pad_size,pad_size)))
         self.gradW = np.zeros_like(self.W)

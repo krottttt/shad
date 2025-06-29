@@ -1,0 +1,17 @@
+import numpy as np
+
+x = np.ones(2)
+print(x)
+print(np.diag(np.ones(2)))
+a = np.array([1, 2, 3])
+print(a)
+print(np.ones((4,3)))
+a= a*np.ones((4,3))
+b = np.array([[1, 2, 3],[6,6,6]])
+# b = a - np.mean(a)
+# print(b)
+# print(a*b)
+print(a)
+print(np.mean(a,axis=0))
+print(np.mean(a,axis=1))
+# print(b@a)
