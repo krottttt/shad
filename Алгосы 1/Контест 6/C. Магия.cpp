@@ -1,155 +1,185 @@
-#include <iostream>
-#include <string>
-#include <tuple>
-#include <vector>
+#include <bits/stdc++.h>
+using namespace std;
 
-using std::cin;
-using std::cout;
-using std::string;
-using std::tie;
-using std::tuple;
-using std::vector;
+constexpr int kMaxNodes = 100000;
+constexpr int kMaxEdges = 500000;
+constexpr int kMaxLog = 20;
 
-struct TreapNode {
-    char value;
-    int priority;
-    int subtree_size;
-    TreapNode* left;
-    TreapNode* right;
+int num_nodes, num_edges, capital_city;
+vector<pair<int, int>> adjacency[kMaxNodes + 1];
+int edge_from[kMaxEdges];
+int edge_to[kMaxEdges];
+bool is_bridge[kMaxEdges];
 
-    explicit TreapNode(char character)
-        : value(character),
-          priority(rand()),
-          subtree_size(1),
-          left(nullptr),
-          right(nullptr) {}
-};
+int dfs_timer;
+int entry_time[kMaxNodes + 1];
+int low_link[kMaxNodes + 1];
+bool visited[kMaxNodes + 1];
 
-int GetSize(TreapNode* node) {
-    return node != nullptr ? node->subtree_size : 0;
-}
+int component_id[kMaxNodes + 1];
+int component_count;
 
-void UpdateSize(TreapNode* node) {
-    if (node != nullptr) {
-        node->subtree_size = 1 + GetSize(node->left) + GetSize(node->right);
+vector<int> component_tree[kMaxNodes + 1];
+int depth[kMaxNodes + 1];
+int parent[kMaxLog][kMaxNodes + 1];
+
+// === Алгоритмы ===
+
+void FindBridges(int current_node, int parent_edge_id) {
+    visited[current_node] = true;
+    entry_time[current_node] = low_link[current_node] = ++dfs_timer;
+
+    for (const auto& [neighbor, edge_id] : adjacency[current_node]) {
+        if (edge_id == parent_edge_id) {
+            continue;
+        }
+        if (visited[neighbor]) {
+            low_link[current_node] =
+                min(low_link[current_node], entry_time[neighbor]);
+        } else {
+            FindBridges(neighbor, edge_id);
+            low_link[current_node] =
+                min(low_link[current_node], low_link[neighbor]);
+            if (low_link[neighbor] > entry_time[current_node]) {
+                is_bridge[edge_id] = true;
+            }
+        }
     }
 }
 
-void Split(TreapNode* current, int count, TreapNode** left_tree,
-           TreapNode** right_tree) {
-    if (current == nullptr) {
-        *left_tree = nullptr;
-        *right_tree = nullptr;
-        return;
+void AssignComponent(int current_node, int current_component_id) {
+    component_id[current_node] = current_component_id;
+    for (const auto& [neighbor, edge_id] : adjacency[current_node]) {
+        if (component_id[neighbor] == 0 && !is_bridge[edge_id]) {
+            AssignComponent(neighbor, current_component_id);
+        }
     }
-    if (GetSize(current->left) >= count) {
-        Split(current->left, count, left_tree, &current->left);
-        *right_tree = current;
-    } else {
-        Split(current->right, count - GetSize(current->left) - 1,
-              &current->right, right_tree);
-        *left_tree = current;
-    }
-    UpdateSize(current);
 }
 
-TreapNode* Merge(TreapNode* left_tree, TreapNode* right_tree) {
-    if (left_tree == nullptr) {
-        return right_tree;
+void BuildComponentTree(int current_component, int parent_component) {
+    parent[0][current_component] = parent_component;
+    for (int neighbor : component_tree[current_component]) {
+        if (neighbor == parent_component) {
+            continue;
+        }
+        depth[neighbor] = depth[current_component] + 1;
+        BuildComponentTree(neighbor, current_component);
     }
-    if (right_tree == nullptr) {
-        return left_tree;
-    }
-    if (left_tree->priority < right_tree->priority) {
-        left_tree->right = Merge(left_tree->right, right_tree);
-        UpdateSize(left_tree);
-        return left_tree;
-    }
-    right_tree->left = Merge(left_tree, right_tree->left);
-    UpdateSize(right_tree);
-    return right_tree;
 }
 
-void TraverseInOrder(TreapNode* node, string* output) {
-    if (node == nullptr) {
-        return;
+int GetLowestCommonAncestor(int component_a, int component_b) {
+    if (depth[component_a] < depth[component_b]) {
+        swap(component_a, component_b);
     }
-    TraverseInOrder(node->left, output);
-    output->push_back(node->value);
-    TraverseInOrder(node->right, output);
+
+    int depth_diff = depth[component_a] - depth[component_b];
+    for (int i = 0; i < kMaxLog; ++i) {
+        if ((depth_diff & (1 << i)) != 0) {
+            component_a = parent[i][component_a];
+        }
+    }
+
+    if (component_a == component_b) {
+        return component_a;
+    }
+
+    for (int i = kMaxLog - 1; i >= 0; --i) {
+        if (parent[i][component_a] != parent[i][component_b]) {
+            component_a = parent[i][component_a];
+            component_b = parent[i][component_b];
+        }
+    }
+
+    return parent[0][component_a];
 }
 
-TreapNode* BuildInitialTreap(const string& encrypted) {
-    TreapNode* root = nullptr;
-    for (char character : encrypted) {
-        TreapNode* node = new TreapNode(character);
-        root = Merge(root, node);
+void ReadGraph() {
+    cin >> num_nodes >> num_edges;
+    cin >> capital_city;
+
+    for (int i = 0; i < num_edges; ++i) {
+        int from_node;
+        cin >> from_node;
+        int to_node;
+        cin >> to_node;
+
+        edge_from[i] = from_node;
+        edge_to[i] = to_node;
+        adjacency[from_node].emplace_back(to_node, i);
+        adjacency[to_node].emplace_back(from_node, i);
     }
-    return root;
 }
 
-void ApplyReverseShift(TreapNode** root, int left_index, int right_index,
-                       int shift) {
-    int segment_length = right_index - left_index + 1;
-    TreapNode* left = nullptr;
-    TreapNode* middle_with_right = nullptr;
-    TreapNode* middle = nullptr;
-    TreapNode* right = nullptr;
-    TreapNode* first_part = nullptr;
-    TreapNode* second_part = nullptr;
+void PrepareBridgesAndComponents() {
+    fill(begin(visited), end(visited), false);
+    dfs_timer = 0;
+    for (int node = 1; node <= num_nodes; ++node) {
+        if (!visited[node]) {
+            FindBridges(node, -1);
+        }
+    }
 
-    Split(*root, left_index - 1, &left, &middle_with_right);
-    Split(middle_with_right, segment_length, &middle, &right);
-    Split(middle, shift, &first_part, &second_part);
-    TreapNode* rotated_middle = Merge(second_part, first_part);
-    *root = Merge(Merge(left, rotated_middle), right);
+    fill(begin(component_id), end(component_id), 0);
+    component_count = 0;
+    for (int node = 1; node <= num_nodes; ++node) {
+        if (component_id[node] == 0) {
+            ++component_count;
+            AssignComponent(node, component_count);
+        }
+    }
+
+    for (int i = 0; i < num_edges; ++i) {
+        if (is_bridge[i]) {
+            int comp_a = component_id[edge_from[i]];
+            int comp_b = component_id[edge_to[i]];
+            component_tree[comp_a].push_back(comp_b);
+            component_tree[comp_b].push_back(comp_a);
+        }
+    }
 }
 
-void FreeTreap(TreapNode* node) {
-    if (node == nullptr) {
-        return;
+void PreprocessLCA(int root_component) {
+    depth[root_component] = 0;
+    BuildComponentTree(root_component, root_component);
+
+    for (int i = 1; i < kMaxLog; ++i) {
+        for (int j = 1; j <= component_count; ++j) {
+            parent[i][j] = parent[i - 1][parent[i - 1][j]];
+        }
     }
-    FreeTreap(node->left);
-    FreeTreap(node->right);
-    delete node;
+}
+
+void ProcessQueries() {
+    int num_queries;
+    cin >> num_queries;
+
+    while (num_queries > 0) {
+        --num_queries;
+
+        int yellow_start;
+        cin >> yellow_start;
+        int blue_start;
+        cin >> blue_start;
+
+        int yellow_component = component_id[yellow_start];
+        int blue_component = component_id[blue_start];
+        int ancestor =
+            GetLowestCommonAncestor(yellow_component, blue_component);
+
+        cout << depth[ancestor] << '\n';
+    }
 }
 
 int main() {
-    std::ios::sync_with_stdio(false);
+    ios::sync_with_stdio(false);
     cin.tie(nullptr);
 
-    string encrypted;
-    cin >> encrypted;
+    ReadGraph();
+    PrepareBridgesAndComponents();
 
-    int shift_count;
-    cin >> shift_count;
+    int root_component = component_id[capital_city];
+    PreprocessLCA(root_component);
 
-    vector<tuple<int, int, int>> shifts;
-    shifts.reserve(shift_count);
-
-    for (int index = 0; index < shift_count; ++index) {
-        int start_index;
-        int end_index;
-        int shift_amount;
-        cin >> start_index >> end_index >> shift_amount;
-        shifts.emplace_back(start_index, end_index, shift_amount);
-    }
-
-    TreapNode* root = BuildInitialTreap(encrypted);
-
-    for (int index = shift_count - 1; index >= 0; --index) {
-        int left_index;
-        int right_index;
-        int shift;
-        tie(left_index, right_index, shift) = shifts[index];
-        ApplyReverseShift(&root, left_index, right_index, shift);
-    }
-
-    string original;
-    original.reserve(encrypted.size());
-    TraverseInOrder(root, &original);
-    cout << original << '\n';
-
-    FreeTreap(root);
+    ProcessQueries();
     return 0;
 }

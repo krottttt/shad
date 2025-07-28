@@ -1,60 +1,155 @@
 #include <iostream>
+#include <string>
+#include <tuple>
 #include <vector>
 
-class DisjointSetUnion {
-public:
-    explicit DisjointSetUnion(int num_employees) : parent_(num_employees + 1) {
-        for (int employee_id = 1; employee_id <= num_employees; ++employee_id) {
-            parent_[employee_id] = employee_id;
-        }
-    }
+using std::cin;
+using std::cout;
+using std::string;
+using std::tie;
+using std::tuple;
+using std::vector;
 
-    int FindDirector(int employee_id) {
-        if (parent_[employee_id] != employee_id) {
-            parent_[employee_id] = FindDirector(parent_[employee_id]);
-        }
-        return parent_[employee_id];
-    }
+struct TreapNode {
+    char value;
+    int priority;
+    int subtree_size;
+    TreapNode* left;
+    TreapNode* right;
 
-    // Назначить boss_id начальником subordinate_id
-    bool SetBoss(int boss_id, int subordinate_id) {
-        if (parent_[subordinate_id] != subordinate_id) {
-            return false;  // Уже есть начальник
-        }
-        int boss_director = FindDirector(boss_id);
-        int subordinate_director = FindDirector(subordinate_id);
-        if (boss_director == subordinate_director) {
-            return false;  // Цикл
-        }
-        parent_[subordinate_id] = boss_id;
-        return true;
-    }
-
-private:
-    std::vector<int> parent_;
+    explicit TreapNode(char character)
+        : value(character),
+          priority(rand()),
+          subtree_size(1),
+          left(nullptr),
+          right(nullptr) {}
 };
+
+int GetSize(TreapNode* node) {
+    return node != nullptr ? node->subtree_size : 0;
+}
+
+void UpdateSize(TreapNode* node) {
+    if (node != nullptr) {
+        node->subtree_size = 1 + GetSize(node->left) + GetSize(node->right);
+    }
+}
+
+void Split(TreapNode* current, int count, TreapNode** left_tree,
+           TreapNode** right_tree) {
+    if (current == nullptr) {
+        *left_tree = nullptr;
+        *right_tree = nullptr;
+        return;
+    }
+    if (GetSize(current->left) >= count) {
+        Split(current->left, count, left_tree, &current->left);
+        *right_tree = current;
+    } else {
+        Split(current->right, count - GetSize(current->left) - 1,
+              &current->right, right_tree);
+        *left_tree = current;
+    }
+    UpdateSize(current);
+}
+
+TreapNode* Merge(TreapNode* left_tree, TreapNode* right_tree) {
+    if (left_tree == nullptr) {
+        return right_tree;
+    }
+    if (right_tree == nullptr) {
+        return left_tree;
+    }
+    if (left_tree->priority < right_tree->priority) {
+        left_tree->right = Merge(left_tree->right, right_tree);
+        UpdateSize(left_tree);
+        return left_tree;
+    }
+    right_tree->left = Merge(left_tree, right_tree->left);
+    UpdateSize(right_tree);
+    return right_tree;
+}
+
+void TraverseInOrder(TreapNode* node, string* output) {
+    if (node == nullptr) {
+        return;
+    }
+    TraverseInOrder(node->left, output);
+    output->push_back(node->value);
+    TraverseInOrder(node->right, output);
+}
+
+TreapNode* BuildInitialTreap(const string& encrypted) {
+    TreapNode* root = nullptr;
+    for (char character : encrypted) {
+        TreapNode* node = new TreapNode(character);
+        root = Merge(root, node);
+    }
+    return root;
+}
+
+void ApplyReverseShift(TreapNode** root, int left_index, int right_index,
+                       int shift) {
+    int segment_length = right_index - left_index + 1;
+    TreapNode* left = nullptr;
+    TreapNode* middle_with_right = nullptr;
+    TreapNode* middle = nullptr;
+    TreapNode* right = nullptr;
+    TreapNode* first_part = nullptr;
+    TreapNode* second_part = nullptr;
+
+    Split(*root, left_index - 1, &left, &middle_with_right);
+    Split(middle_with_right, segment_length, &middle, &right);
+    Split(middle, shift, &first_part, &second_part);
+    TreapNode* rotated_middle = Merge(second_part, first_part);
+    *root = Merge(Merge(left, rotated_middle), right);
+}
+
+void FreeTreap(TreapNode* node) {
+    if (node == nullptr) {
+        return;
+    }
+    FreeTreap(node->left);
+    FreeTreap(node->right);
+    delete node;
+}
 
 int main() {
     std::ios::sync_with_stdio(false);
-    std::cin.tie(nullptr);
+    cin.tie(nullptr);
 
-    int num_employees;
-    int num_queries;
-    std::cin >> num_employees >> num_queries;
-    DisjointSetUnion dsu(num_employees);
+    string encrypted;
+    cin >> encrypted;
 
-    for (int query_index = 0; query_index < num_queries; ++query_index) {
-        int first_value;
-        if (std::cin >> first_value) {
-            if (std::cin.peek() == '\n' || std::cin.eof()) {
-                // Запрос директора
-                std::cout << dsu.FindDirector(first_value) << '\n';
-            } else {
-                int second_value;
-                std::cin >> second_value;
-                std::cout << dsu.SetBoss(first_value, second_value) << '\n';
-            }
-        }
+    int shift_count;
+    cin >> shift_count;
+
+    vector<tuple<int, int, int>> shifts;
+    shifts.reserve(shift_count);
+
+    for (int index = 0; index < shift_count; ++index) {
+        int start_index;
+        int end_index;
+        int shift_amount;
+        cin >> start_index >> end_index >> shift_amount;
+        shifts.emplace_back(start_index, end_index, shift_amount);
     }
+
+    TreapNode* root = BuildInitialTreap(encrypted);
+
+    for (int index = shift_count - 1; index >= 0; --index) {
+        int left_index;
+        int right_index;
+        int shift;
+        tie(left_index, right_index, shift) = shifts[index];
+        ApplyReverseShift(&root, left_index, right_index, shift);
+    }
+
+    string original;
+    original.reserve(encrypted.size());
+    TraverseInOrder(root, &original);
+    cout << original << '\n';
+
+    FreeTreap(root);
     return 0;
 }
